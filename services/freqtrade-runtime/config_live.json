@@ -1,0 +1,84 @@
+{
+    "max_open_trades": 5,
+    "stake_currency": "USDT",
+    "stake_amount": "unlimited",
+    "tradable_balance_ratio": 0.99,
+    "fiat_display_currency": "USD",
+    "dry_run": false,
+    "dry_run_wallet": 100,
+    "cancel_open_orders_on_exit": false,
+    "trading_mode": "futures",
+    "margin_mode": "isolated",
+    "use_exit_signal": true,
+    "exit_profit_only": false,
+    "ignore_roi_if_entry_signal": false,
+    "unfilledtimeout": {
+        "entry": 10,
+        "exit": 10,
+        "exit_timeout_count": 20,
+        "unit": "minutes"
+    },
+    "exchange": {
+        "name": "binanceusdm",
+        "key": "${BINANCE_API_KEY}",
+        "secret": "${BINANCE_API_SECRET}",
+        "ccxt_sync_config": {},
+        "ccxt_async_config": {}
+    },
+    "pair_whitelist": [
+        "BTC/USDT:USDT",
+        "ETH/USDT:USDT",
+        "BNB/USDT:USDT",
+        "SOL/USDT:USDT",
+        "XRP/USDT:USDT"
+    ],
+    "pair_blacklist": [],
+    "bot_name": "TradingBot-v2",
+    "import_strategy": true,
+    "strategy": "AITradingStrategy",
+    "strategy_path": "user_data/strategies/",
+    "dataformat_ohlcv": "feather",
+    "dataformat_trades": "sqlite",
+    "telegram": {},
+    "api_server": {
+        "enabled": true,
+        "listen_ip_address": "0.0.0.0",
+        "listen_port": 8080,
+        "verbosity": "error",
+        "enable_openapi": true,
+        "jwt_secret_key": "CHANGE_ME",
+        "CORS_origins": ["http://localhost:3000"],
+        "password": "CHANGE_ME"
+    },
+    "minimal_roi": {
+        "0": 0.10
+    },
+    "stoploss": -0.05,
+    "trailing_stop": true,
+    "trailing_stop_positive": 0.02,
+    "trailing_stop_positive_offset": 0.03,
+    "trailing_only_offset_is_reached": true,
+    "use_custom_stoploss": true,
+    "timeframe": "5m",
+    "timeframe_ms": 300000,
+    "startup_candle_count": 150,
+    "strategy_list": ["AITradingStrategy"],
+    "external_message_consumer": {
+        "enabled": true,
+        "producers": [
+            {
+                "name": "default",
+                "host": "redis",
+                "port": 6379,
+                "username": "",
+                "password": "CHANGE_ME",
+                "ssl": false
+            }
+        ]
+    },
+    "db_file": "sqlite:///user_data/tradesv3.sqlite",
+    "log_filters": {
+        "default": "warning",
+        "stderr": "critical"
+    }
+}

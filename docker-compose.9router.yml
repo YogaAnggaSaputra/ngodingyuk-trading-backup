@@ -1,0 +1,38 @@
+# 9Router — dev-only AI gateway
+# Terisolasi dari stack trading, tidak pakai network deploy_default
+# Port: 20128, di-bind ke 127.0.0.1 saja (akses publik HANYA via Cloudflare
+#   Tunnel -> 9router.ngodingyuk.site). Ini penting karena 9Router menyimpan
+#   API key provider; jangan pernah expose ke 0.0.0.0.
+# Data persisten di ~/.9router (host volume)
+# Password admin: dari INITIAL_PASSWORD di .env.9router (jangan hardcode di sini)
+
+services:
+  9router:
+    image: decolua/9router:latest
+    container_name: deploy-9router-1
+    restart: unless-stopped
+    ports:
+      # 127.0.0.1 -> hanya bisa diakses dari host (cloudflared jalan di host)
+      - "127.0.0.1:20128:20128"
+    volumes:
+      - /home/ngodingyuk/.9router:/app/data
+    env_file:
+      - .env.9router
+    environment:
+      PORT: "20128"
+      # HOSTNAME tetap 0.0.0.0 = bind di dalam container; isolasi dilakukan
+      # oleh port mapping 127.0.0.1 di atas, bukan di sini.
+      HOSTNAME: "0.0.0.0"
+      # Force public URL agar OAuth callback tidak jatuh ke localhost.
+      PUBLIC_URL: "https://9router.ngodingyuk.site"
+      NEXT_PUBLIC_BASE_URL: "https://9router.ngodingyuk.site"
+      NEXTAUTH_URL: "https://9router.ngodingyuk.site"
+      TRUST_PROXY: "1"
+      DATA_DIR: "/app/data"
+    networks:
+      - dev-net
+    # TIDAK depends_on stack trading — benar-benar terpisah
+
+networks:
+  dev-net:
+    driver: bridge

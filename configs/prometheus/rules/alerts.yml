@@ -1,0 +1,107 @@
+groups:
+- name: botbinance.rules
+  rules:
+  - alert: KillSwitchTriggered
+    expr: killswitch_level != 0
+    for: 0m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Kill switch is active"
+      description: "Kill switch level: {{ $labels.level }}"
+
+  - alert: PositionMismatch
+    expr: reconcile_mismatch_count > 0
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Position mismatch detected"
+      description: "Pair: {{ $labels.pair }}, Mismatches: {{ $value }}"
+
+  - alert: SLTPNotPlaced
+    expr: order_filled and stop_loss_not_placed
+    for: 30s
+    labels:
+      severity: critical
+    annotations:
+      summary: "Stop-loss/Take-profit not placed after fill"
+      description: "Order: {{ $labels.order_id }}"
+
+  - alert: MarketDataStale
+    expr: market_data_freshness_seconds > 60
+    for: 1m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Market data is stale"
+      description: "Pair: {{ $labels.pair }}, Age: {{ $value }}s"
+
+  - alert: WebSocketDisconnected
+    expr: websocket_connected == 0
+    for: 30s
+    labels:
+      severity: warning
+    annotations:
+      summary: "WebSocket connection lost"
+      description: "WebSocket not connected for 30+ seconds"
+
+  - alert: APITimeout
+    expr: rate(api_errors_total{type="timeout"}[5m]) > 0.1
+    for: 1m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High API timeout rate"
+
+  - alert: RateLimitWarning
+    expr: rate(api_rate_limit_total[5m]) > 0.1
+    for: 1m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Rate limit approaching"
+
+  - alert: DailyLossNearLimit
+    expr: daily_loss_pct > 0.015
+    for: 0m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Daily loss near limit"
+      description: "Daily loss: {{ $value*100 }}%"
+
+  - alert: MaxDrawdownNearLimit
+    expr: max_drawdown_pct > 0.04
+    for: 0m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Max drawdown near limit"
+      description: "Max drawdown: {{ $value*100 }}%"
+
+  - alert: OrderRejectionRateHigh
+    expr: rate(risk_rejections_total[5m]) / rate(risk_checks_total[5m]) > 0.5
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High order rejection rate"
+
+  - alert: ContainerCrashLoop
+    expr: rate(container_restart_count[5m]) > 0
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Container crash looping"
+      description: "Container: {{ $labels.container }}"
+
+  - alert: HermesProposalCreated
+    expr: increase(hermes_proposal_total[1m]) > 0
+    for: 0m
+    labels:
+      severity: info
+    annotations:
+      summary: "Hermes proposal created"
+      description: "Proposal: {{ $labels.proposal_id }}"

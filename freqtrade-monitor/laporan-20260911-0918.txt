@@ -1,0 +1,8 @@
+🕐 2026-09-11 16:18 WIB
+✅ Status bot: Berjalan (running)
+✅ Error fatal (6m terakhir): 0
+✅ Posisi open: 0
+✅ ML service: Normal (tidak ada penolakan entry)
+✅ Emergency loosen alert: Tidak ada
+
+Ringkasan: Bot sehat. Tidak ada posisi terbuka. Tidak ada error fatal. Entry filter aktif dan ketat (min_rrr 1.3, conf 60, ADX 25, volume 1.5, ML fail-closed) — tidak ada trade selama berjam-jam adalah kondisi normal.

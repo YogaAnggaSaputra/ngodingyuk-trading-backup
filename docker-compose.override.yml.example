@@ -1,0 +1,91 @@
+services:
+  binance-adapter:
+    build:
+      context: ./services/binance-adapter
+    environment:
+      - BINANCE_API_KEY=your_api_key
+      - BINANCE_API_SECRET=your_api_secret
+      - BINANCE_FUTURES_TESTNET=false
+    volumes:
+      - ./services/binance-adapter:/app
+    ports:
+      - "8001:8000"
+    depends_on:
+      - redis
+
+  risk-gateway:
+    build:
+      context: ./services/risk-gateway
+    volumes:
+      - ./services/risk-gateway:/app
+      - ./configs/risk-gateway:/config
+    ports:
+      - "8003:8000"
+    depends_on:
+      - postgres
+      - redis
+
+  market-data-gateway:
+    build:
+      context: ./services/market-data-gateway
+    volumes:
+      - ./services/market-data-gateway:/app
+    ports:
+      - "8004:8000"
+    depends_on:
+      - postgres
+      - redis
+
+  freqtrade-runtime:
+    build:
+      context: ./services/freqtrade-runtime
+    volumes:
+      - ./services/freqtrade-runtime:/app
+      - ./configs/freqtrade:/freqtrade/configs
+    ports:
+      - "8080:8080"
+    depends_on:
+      - binance-adapter
+      - risk-gateway
+
+  discord-bot:
+    build:
+      context: ./services/discord-bot
+    environment:
+      - DISCORD_BOT_TOKEN=your_bot_token
+      - DISCORD_CHANNEL_ID=your_channel_id
+      - DISCORD_AUTHORIZED_USER_ID=your_user_id
+    volumes:
+      - ./services/discord-bot:/app
+    depends_on:
+      - redis
+      - postgres
+
+  reconciler:
+    build:
+      context: ./services/reconciler
+    volumes:
+      - ./services/reconciler:/app
+    depends_on:
+      - postgres
+      - redis
+
+  postgres:
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  prometheus:
+    ports:
+      - "9090:9090"
+
+  grafana:
+    ports:
+      - "3000:3000"
+
+  alertmanager:
+    ports:
+      - "9093:9093"

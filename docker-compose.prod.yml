@@ -1,0 +1,200 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    secrets:
+      - db_password
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 16G
+        reservations:
+          cpus: "2.0"
+          memory: 8G
+
+  redis:
+    image: redis:7-alpine
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --maxmemory 1gb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redisdata:/data
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 2G
+
+  binance-adapter:
+    image: ${DOCKER_REGISTRY}/botbinance-binance-adapter:${VERSION:-latest}
+    environment:
+      BINANCE_API_KEY_FILE: /run/secrets/binance_api_key
+      BINANCE_API_SECRET_FILE: /run/secrets/binance_api_secret
+      BINANCE_FUTURES_TESTNET: "false"
+      BINANCE_FUTURES_BASE_URL: "https://fapi.binance.com"
+    secrets:
+      - binance_api_key
+      - binance_api_secret
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+
+  freqtrade-runtime:
+    image: ${DOCKER_REGISTRY}/botbinance-freqtrade-runtime:${VERSION:-latest}
+    environment:
+      BINANCE_API_KEY_FILE: /run/secrets/binance_api_key
+      BINANCE_API_SECRET_FILE: /run/secrets/binance_api_secret
+      BINANCE_FUTURES_TESTNET: "false"
+      BINANCE_FUTURES_BASE_URL: "https://fapi.binance.com"
+      FREQTRADE_STRATEGY: ${FREQTRADE_STRATEGY:-AITradingStrategy}
+    secrets:
+      - binance_api_key
+      - binance_api_secret
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 8G
+
+  risk-gateway:
+    image: ${DOCKER_REGISTRY}/botbinance-risk-gateway:${VERSION:-latest}
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER}
+      DB_PASSWORD_FILE: /run/secrets/db_password
+      DB_NAME: ${DB_NAME}
+    secrets:
+      - db_password
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  market-data-gateway:
+    image: ${DOCKER_REGISTRY}/botbinance-market-data-gateway:${VERSION:-latest}
+    environment:
+      BINANCE_FUTURES_TESTNET: "false"
+      BINANCE_FUTURES_BASE_URL: "https://fapi.binance.com"
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER}
+      DB_PASSWORD_FILE: /run/secrets/db_password
+      DB_NAME: ${DB_NAME}
+    secrets:
+      - db_password
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=90d"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ./configs/prometheus.prod.yml:/etc/prometheus/prometheus.yml
+      - prometheusdata:/prometheus
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD_FILE: /run/secrets/grafana_password
+      GF_INSTALL_PLUGINS: grafana-clock-panel
+    volumes:
+      - ./configs/grafana:/etc/grafana/provisioning
+      - grafanadata:/var/lib/grafana
+    secrets:
+      - grafana_password
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+    volumes:
+      - ./configs/alertmanager.prod.yml:/etc/alertmanager/alertmanager.yml
+      - alertmanagerdata:/alertmanager
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.0
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    ports:
+      - "8080:8080"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.0
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    ports:
+      - "9100:9100"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+
+volumes:
+  pgdata:
+  redisdata:
+  prometheusdata:
+  grafanadata:
+  alertmanagerdata:
+
+secrets:
+  binance_api_key:
+    external: true
+  binance_api_secret:
+    external: true
+  db_password:
+    external: true
+  grafana_password:
+    external: true

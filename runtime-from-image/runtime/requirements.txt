@@ -1,0 +1,15 @@
+aiohttp==3.11.11
+fastapi==0.115.6
+uvicorn==0.34.0
+redis==5.2.1
+sqlalchemy==2.0.36
+asyncpg==0.30.0
+alembic==1.14.0
+pydantic==2.10.4
+structlog==24.4.0
+prometheus-client==0.21.1
+python-dotenv==1.0.1
+tenacity==9.0.0
+# freqtrade & TA-Lib TIDAK diinstal di sini — base image
+# freqtradeorg/freqtrade:2026.3 sudah menyediakan keduanya.
+# Versi di atas dinaikkan agar kompatibel dengan Python 3.13 (image 2026.x).
