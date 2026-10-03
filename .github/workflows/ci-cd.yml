@@ -1,0 +1,236 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  lint:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install ruff mypy
+          pip install -r services/binance-adapter/requirements.txt
+          pip install -r services/risk-gateway/requirements.txt
+          pip install -r services/market-data-gateway/requirements.txt
+          pip install -r services/reconciler/requirements.txt
+          pip install -r services/discord-bot/requirements.txt
+
+      - name: Run Ruff
+        run: ruff check services/ shared/ tests/
+
+      - name: Run MyPy
+        run: mypy services/ shared/ tests/ --ignore-missing-imports
+
+  test:
+    name: Unit & Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: timescale/timescaledb:2.15-pg15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        ports: [5432]
+        options: >-
+          --health-cmd "pg_isready -U test -d test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: [6379]
+        options: --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install pytest pytest-asyncio pytest-cov pytest-mock
+          pip install -r services/binance-adapter/requirements.txt
+          pip install -r services/risk-gateway/requirements.txt
+          pip install -r services/market-data-gateway/requirements.txt
+          pip install -r services/reconciler/requirements.txt
+          pip install -r services/discord-bot/requirements.txt
+          pip install -e shared/
+
+      - name: Run DB migrations
+        run: |
+          cd services/risk-gateway
+          alembic upgrade head
+        env:
+          DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/test
+
+      - name: Run tests
+        run: |
+          pytest tests/ -v --cov=services --cov=shared --cov-report=xml
+        env:
+          DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          BINANCE_FUTURES_TESTNET: "true"
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+
+  build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push binance-adapter
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          dockerfile: services/binance-adapter/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/binance-adapter:${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push risk-gateway
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          dockerfile: services/risk-gateway/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/risk-gateway:${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push market-data-gateway
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          dockerfile: services/market-data-gateway/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/market-data-gateway:${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push freqtrade-runtime
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          dockerfile: services/freqtrade-runtime/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/freqtrade-runtime:${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push discord-bot
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          dockerfile: services/discord-bot/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/discord-bot:${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push reconciler
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          dockerfile: services/reconciler/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/reconciler:${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-demo:
+    name: Deploy to Demo
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/develop'
+    environment: demo
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd /opt/botbinance
+            docker compose pull
+            docker compose up -d
+            docker compose exec -T postgres alembic upgrade head
+
+  deploy-prod:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST_PROD }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd /opt/botbinance
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+            docker compose exec -T postgres alembic upgrade head
